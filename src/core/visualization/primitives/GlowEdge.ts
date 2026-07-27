@@ -20,12 +20,15 @@ export class GlowEdge {
   private readonly targetColor = new THREE.Color('#1e3a8a');
   private targetEmissive = 0.15;
   private targetOpacity = 0.5;
+  /** Baked-in cylinder length, so `setEndpoints` can rescale instead of rebuild. */
+  private readonly baseLength: number;
 
   private static readonly LAMBDA = 12;
 
   constructor(a: THREE.Vector3, b: THREE.Vector3, radius = 0.12, weight?: number) {
     const dir = new THREE.Vector3().subVectors(b, a);
-    const length = dir.length();
+    const length = Math.max(dir.length(), 0.0001);
+    this.baseLength = length;
     const geometry = new THREE.CylinderGeometry(radius, radius, length, 8, 1, true);
     this.material = new THREE.MeshStandardMaterial({
       color: this.color.clone(),
@@ -53,6 +56,30 @@ export class GlowEdge {
       this.label.position.copy(mid);
       this.group.add(this.label);
     }
+  }
+
+  /**
+   * Re-aim the edge at a new pair of endpoints.
+   *
+   * Rescales the existing cylinder rather than rebuilding its geometry, so an
+   * edge can be pooled and reused. That matters for the disjoint-set forest,
+   * whose parent pointers move on nearly every union — allocating fresh
+   * geometry each time would thrash the GPU throughout a Kruskal run.
+   */
+  setEndpoints(a: THREE.Vector3, b: THREE.Vector3): void {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const length = Math.max(dir.length(), 0.0001);
+    this.mesh.scale.y = length / this.baseLength;
+    this.mesh.position.copy(new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5));
+    this.mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.clone().normalize(),
+    );
+  }
+
+  /** Hide without disposing — used by pooled edges that are currently unused. */
+  setVisible(visible: boolean): void {
+    this.group.visible = visible;
   }
 
   setTargetStyle(colorHex: string, emissive: number, opacity: number): void {

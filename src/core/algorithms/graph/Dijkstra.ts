@@ -7,6 +7,7 @@ export class Dijkstra extends GraphAlgorithm {
     id: 'dijkstra',
     name: "Dijkstra's",
     category: GRAPH_CATEGORY,
+    group: 'Shortest Path',
     description:
       'Grows a tree of shortest paths from the start, always settling the unvisited node with the smallest known distance and relaxing its edges. Optimal for graphs with non-negative weights.',
     complexity: {
@@ -22,7 +23,7 @@ export class Dijkstra extends GraphAlgorithm {
     const settled = new Set<number>();
     const parent = new Map<number, number>();
     dist[start] = 0;
-    t.frontier(start, 'start has distance 0');
+    t.at(1).frontier(start, 'start has distance 0');
 
     for (;;) {
       // Select the unsettled node with the minimum tentative distance.
@@ -36,28 +37,29 @@ export class Dijkstra extends GraphAlgorithm {
       }
       if (u === -1) break; // remaining nodes are unreachable
 
-      t.visit(u, `settle nearest node (distance ${best})`);
+      t.at(4).visit(u, `settle nearest node (distance ${best})`);
       settled.add(u);
       if (u === goal) {
-        t.settle(u, 'reached the goal');
+        t.at(7).settle(u, 'reached the goal');
         break;
       }
 
       for (const { to, w } of t.neighbors(u)) {
-        t.explore(u, to);
+        t.at(8).explore(u, to);
         if (settled.has(to)) continue;
         const nd = dist[u] + w;
         if (nd < dist[to]) {
           const firstReach = dist[to] === Infinity;
           dist[to] = nd;
           parent.set(to, u);
-          if (firstReach) t.frontier(to, 'discover a new node');
-          t.relax(u, to, nd, `relax edge → distance ${nd}`);
+          if (firstReach) t.at(9).frontier(to, 'discover a new node');
+          t.at(10).relax(u, to, nd, `relax edge → distance ${nd}`);
         }
       }
-      t.settle(u);
+      t.at(6).settle(u);
     }
 
+    t.at(12);
     this.reconstructPath(t, parent, start, goal);
   }
 }

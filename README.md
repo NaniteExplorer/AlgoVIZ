@@ -1,77 +1,160 @@
-# AlgoViz
+# AlgoVIZ
 
-An enterprise-grade, **OOP**, **Three.js**-powered algorithm visualization platform built on **Next.js 15** + **TypeScript**. Classic algorithms are rendered as living, glowing 3D geometry with full transport controls (play / pause / step / scrub / speed).
+AlgoVIZ is a production-style algorithm visualization platform built with
+Next.js, React, TypeScript, Three.js and Canvas 2D. It turns computer science,
+data structures and graph theory into interactive step-by-step visual lessons.
 
-```bash
-npm install
-npm run dev        # http://localhost:3000
-npm run build      # production build
-npm run typecheck  # strict tsc, no emit
-```
+The project is designed as a serious portfolio-grade engineering system: typed
+algorithm contracts, deterministic playback, reusable visualization modules,
+route-driven catalog pages, pseudocode highlighting, complexity analysis and a
+verification harness for the pure algorithm layer.
+
+## Highlights
+
+- Interactive visual studio with play, pause, step, scrub, speed control and
+  algorithm-specific input controls.
+- Deterministic algorithm timelines, allowing reliable replay, reverse scrubbing
+  and side-by-side comparison.
+- Hybrid rendering architecture using Three.js/WebGL for spatial visualizations
+  and Canvas 2D for structure-heavy views.
+- OOP core with registry-driven algorithm discovery, category modules and
+  model-renderer separation.
+- Built-in pseudocode pane, narrated steps, visual legends and complexity cards.
+- Searchable algorithm catalog powered by metadata derived from the runtime
+  registry, avoiding duplicated route/catalog state.
+- Verification suite that checks determinism, replay correctness and independent
+  reference implementations for major algorithm families.
+- Experimental DP, backtracking, ML and probability drafts are kept in the
+  codebase, but disconnected from the app until they receive more useful visual
+  treatments beyond numeric tables or overly abstract boards.
+
+## Algorithm Coverage
+
+AlgoVIZ currently includes broad coverage across:
+
+- Sorting: bubble, insertion, selection, shell, comb, cocktail, merge, quick,
+  heap, radix, gnome, odd-even and pancake sort.
+- Searching: linear, binary, jump, exponential, interpolation and ternary search.
+- Graphs: BFS, DFS, Dijkstra, A*, Bellman-Ford, Kruskal, Prim, topological sort,
+  union-find, Tarjan SCC and max-flow.
+- Trees: BST insert/search and depth-first traversals.
+- Data Structures: linked list, stack/queue, hash tables, min heap, trie, AVL
+  rotations and segment tree operations.
+- Disconnected source drafts: dynamic programming, backtracking and
+  ML/probability implementations remain in source and tests, but are not
+  registered into the learner-facing app.
+- ML/Probability draft implementations: Bayes Rule, Markov Chains, linear
+  regression, logistic regression, Naive Bayes, K-Means, PCA, Perceptron,
+  neural-network forward pass, backpropagation, CNN convolution, self-attention
+  and Q-Learning are present in source but intentionally not registered in the
+  app yet.
+
+## Tech Stack
+
+- Framework: Next.js 15 App Router, React 19
+- Language: TypeScript with strict compiler settings
+- Rendering: Three.js/WebGL, custom Canvas 2D renderer, requestAnimationFrame
+  animation loop
+- Styling: Tailwind CSS, custom theme tokens, responsive UI primitives
+- Architecture: object-oriented algorithm classes, category modules, typed step
+  unions, pure replayable models, registry-based discovery
+- Learning UX: pseudocode registry, step narration, legends, metrics and
+  complexity profiles
+- Quality: ESLint, strict typecheck, custom CommonJS verification harness,
+  deterministic seeded checks
 
 ## Architecture
 
-The codebase is organised in strict layers, each ignorant of the ones above it. Data flows **down** (algorithm → steps → model → renderer); time flows from a single clock (the engine's render loop).
+The core idea is simple: algorithms do not draw anything. They emit typed,
+deterministic steps. Models consume those steps and become the authoritative
+state. Renderers read the model and animate the current state.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ React / Next.js  (app/, src/components, src/hooks)            │
-│   useVisualizer ── bridges the imperative world to React      │
-├─────────────────────────────────────────────────────────────┤
-│ Playback         (src/core/playback)                          │
-│   PlaybackController — drives a step timeline over time        │
-├──────────────────────────────┬──────────────────────────────┤
-│ Algorithm (logic)            │ Visualization (rendering)      │
-│  src/core/algorithms         │  src/core/visualization        │
-│   Algorithm → Step[]         │   VisualizationEngine (Three)  │
-│   AlgorithmRegistry          │   Visualizer (abstract)        │
-│                              │   VisualizerFactory            │
-├──────────────────────────────┴──────────────────────────────┤
-│ Model            (src/core/model)                             │
-│   ArrayModel — pure, replayable state machine                 │
-└─────────────────────────────────────────────────────────────┘
+```text
+Algorithm -> Step[] -> Model -> Renderer -> UI
 ```
 
-### Key design decisions
+This keeps the system extensible. A new sorting algorithm only needs to emit
+sorting steps. A new family defines its own step union, model and category
+module, then registers itself once.
 
-- **Steps are the only contract** between an algorithm and its renderer. An
-  algorithm emits a deterministic `SortStep[]`; the visualizer pulls model state
-  every frame. Neither knows the other exists — this is what makes one
-  `SortingVisualizer` render *every* sort.
-- **Replay-based scrubbing.** Because algorithms are deterministic and the model
-  is a pure state machine, stepping backward / seeking is just "rewind + replay
-  from start". No inverse-step bookkeeping.
-- **Single clock.** The `VisualizationEngine` render loop is the only time
-  source: it advances playback (mutating the model) and the visualizer reads the
-  model on the same frame. Discrete steps become smooth, frame-rate-independent
-  motion via critically-damped tweening.
-- **Raw Three.js wrapped in OOP** (not react-three-fiber), per the brief — the
-  engine, visualizers and scene objects are plain classes with explicit
-  lifecycles and deterministic GPU-resource disposal.
+Important extension points:
 
-## Extending the platform
+- `src/core/algorithms`: pure algorithm implementations and metadata.
+- `src/core/model`: replayable state machines for each visualization family.
+- `src/core/visualization`: Three.js and Canvas 2D renderers plus category
+  modules.
+- `src/core/pseudocode`: pseudocode listings keyed by algorithm id.
+- `src/catalog`: route/search/presentation metadata derived from the registry.
+- `verify`: correctness checks for deterministic algorithm behavior.
 
-### Add a new sorting algorithm
+## Resume-Ready Summary
 
-1. Create `src/core/algorithms/sorting/ShellSort.ts` extending `SortingAlgorithm`;
-   implement `sort(tracer)` against the `SortTracer` API.
-2. Add one line to `src/core/algorithms/sorting/index.ts`.
+Built an extensible algorithm visualization platform using Next.js 15, React 19,
+TypeScript, Three.js and Canvas 2D, featuring deterministic playback, typed
+algorithm timelines, registry-driven routing, pseudocode synchronization and
+custom verification tests across sorting, searching, graph, tree and data
+structure algorithms, with additional disconnected source drafts for DP,
+backtracking and ML.
 
-It now appears in the selector, routing and visualizer automatically.
+Resume bullets:
 
-### Add a whole new family (graph, tree, …)
+- Architected a modular visualization engine where pure algorithm classes emit
+  typed step timelines consumed by replayable state models and WebGL/Canvas
+  renderers.
+- Implemented a registry-driven catalog that automatically powers navigation,
+  static routes, search metadata and visualizer selection from one source of
+  truth.
+- Added deterministic playback with step, scrub, replay and race-comparison
+  support by designing algorithms as pure functions over structured inputs.
+- Built verification tooling that validates determinism, replay correctness and
+  algorithm results against independent reference implementations.
+- Prepared DP, backtracking and ML expansion layers in source while keeping
+  unfinished or low-value visual demos out of the learner-facing app.
 
-1. Define its step union (e.g. `graph/GraphStep.ts`) and `GraphModel`
-   implementing `StepConsumer`.
-2. Implement a `GraphVisualizer extends Visualizer`.
-3. Add a `case` to `VisualizerFactory`.
-4. Register its algorithms via a `graph/index.ts` barrel imported by
-   `src/core/algorithms/index.ts`.
+## Getting Started
 
-The engine, playback controller, hook and UI are all category-agnostic and need
-no changes.
+```bash
+npm install
+npm run dev
+```
 
-## Tech
+Open `http://localhost:3000`.
 
-Next.js 15 (App Router) · React 19 · TypeScript (strict) · Three.js (WebGL +
-UnrealBloom post-processing) · Tailwind CSS.
+Useful commands:
+
+```bash
+npm run typecheck
+npm run lint
+npm run verify
+npm run build
+npm run check
+```
+
+## Development Workflow
+
+Add a new algorithm inside the matching family folder, register it in that
+family's `index.ts`, and optionally add enrichment and pseudocode entries. The
+catalog, route generation, selector and search UI will pick it up from the
+registry.
+
+For a new algorithm family, add:
+
+- A category value in `AlgorithmCategory`
+- A step union and algorithm base class
+- A replayable model
+- A `CategoryModule` and renderer
+- A visualizer factory case
+- A family registration barrel imported by `src/core/algorithms/index.ts`
+
+## Vision
+
+AlgoVIZ is evolving from a classic DSA visualizer into a broader learning lab
+for algorithms, mathematics, probability and machine learning. Draft DP,
+backtracking and ML implementations exist in source, but they are intentionally
+disconnected from the app because the current numeric table and abstract board
+views are not good enough for those topics. The next milestone should use richer
+visual surfaces: state-space trees, constraint boards with explanations,
+geometric plots, decision boundaries, loss landscapes, graph-like neural
+networks, convolution windows, attention heatmaps, probability distributions,
+matrix transformations, optimizers, regularization, decision trees, random
+forests, SVMs and transformer internals.

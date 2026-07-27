@@ -2,7 +2,8 @@ import type { AnyAlgorithm } from '@/core/algorithms';
 import { describeSearchStep } from '@/core/algorithms/searching/describe';
 import type { SearchInput, SearchStep } from '@/core/algorithms/searching/SearchStep';
 import { SearchCellRole, SearchModel } from '@/core/model/SearchModel';
-import { CategoryModule, type ControlSpec, type LegendItem, type MetricSpec } from '../CategoryModule';
+import type { ControlSpec, LegendItem, MetricSpec } from '../CategoryModule';
+import { WebGLCategoryModule } from '../WebGLCategoryModule';
 import type { EngineOptions } from '../engine/VisualizationEngine';
 import { SEARCH_ROLE_LABELS, SEARCH_ROLE_STYLES } from './palette';
 import { SearchingVisualizer } from './SearchingVisualizer';
@@ -31,7 +32,7 @@ function makeInstance(size: number): SearchInput {
 }
 
 /** Searching family driver. */
-export class SearchingModule extends CategoryModule<SearchStep> {
+export class SearchingModule extends WebGLCategoryModule<SearchStep, SearchInput> {
   readonly engineOptions: EngineOptions = {
     enableControls: true,
     autoRotate: false,
@@ -71,6 +72,15 @@ export class SearchingModule extends CategoryModule<SearchStep> {
 
   buildTimeline(algorithm: AnyAlgorithm): SearchStep[] {
     return (algorithm as { run(input: SearchInput): SearchStep[] }).run(this.input);
+  }
+
+  getInstance(): SearchInput {
+    return { values: [...this.input.values], target: this.input.target };
+  }
+
+  setInstance(input: SearchInput): void {
+    this.input = { values: [...input.values], target: input.target };
+    this.model.reset(this.input);
   }
 
   describe(step: SearchStep): string {

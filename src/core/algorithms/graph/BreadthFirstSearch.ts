@@ -7,6 +7,7 @@ export class BreadthFirstSearch extends GraphAlgorithm {
     id: 'bfs',
     name: 'Breadth-First Search',
     category: GRAPH_CATEGORY,
+    group: 'Traversal',
     description:
       'Explores the graph in expanding rings, visiting all nodes at distance k before any at distance k+1, using a FIFO queue. Finds the shortest path in terms of edge count on unweighted graphs.',
     complexity: {
@@ -22,30 +23,30 @@ export class BreadthFirstSearch extends GraphAlgorithm {
     const inFrontier = new Set<number>([start]);
     const parent = new Map<number, number>();
     const queue: number[] = [start];
-    t.frontier(start, 'enqueue the start node');
+    t.at(1).frontier(start, 'enqueue the start node');
 
     while (queue.length) {
       const u = queue.shift()!;
       inFrontier.delete(u);
-      t.visit(u, 'dequeue the next node');
+      t.at(4).visit(u, 'dequeue the next node');
       visited.add(u);
 
       if (u === goal) {
-        t.settle(u, 'reached the goal');
+        t.at(5).settle(u, 'reached the goal');
         this.reconstructPath(t, parent, start, goal);
         return;
       }
 
       for (const { to } of t.neighbors(u)) {
-        t.explore(u, to);
+        t.at(6).explore(u, to);
         if (visited.has(to) || inFrontier.has(to)) continue;
         parent.set(to, u);
         inFrontier.add(to);
         queue.push(to);
-        t.frontier(to, 'enqueue an undiscovered neighbour');
+        t.at(9).frontier(to, 'enqueue an undiscovered neighbour');
       }
-      t.settle(u);
+      t.at(3).settle(u);
     }
-    t.done('the goal is unreachable from the start');
+    t.at(10).done('the goal is unreachable from the start');
   }
 }

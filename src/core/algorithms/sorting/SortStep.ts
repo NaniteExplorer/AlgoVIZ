@@ -6,6 +6,8 @@
  * about the other. This is what lets a single `SortingVisualizer` render every
  * comparison sort, and what lets us add a new sort without touching rendering.
  */
+import type { TracedStep } from '../types';
+
 export enum SortStepKind {
   /** Two indices are being compared. Transient visual highlight. */
   Compare = 'compare',
@@ -21,7 +23,7 @@ export enum SortStepKind {
   MarkSorted = 'mark-sorted',
 }
 
-export interface SortStep {
+export interface SortStep extends TracedStep {
   readonly kind: SortStepKind;
   /** Primary index the step acts on. */
   readonly a: number;

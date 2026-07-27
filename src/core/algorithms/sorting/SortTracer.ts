@@ -1,3 +1,4 @@
+import { StepTracer } from '../StepTracer';
 import { type SortStep, SortStepKind } from './SortStep';
 
 /**
@@ -10,13 +11,9 @@ import { type SortStep, SortStepKind } from './SortStep';
  * which is exactly the class of bug the original codebase suffered from (two
  * divergent ad-hoc animation encodings).
  */
-export class SortTracer {
-  private readonly _steps: SortStep[] = [];
-
-  constructor(private readonly array: number[]) {}
-
-  get steps(): readonly SortStep[] {
-    return this._steps;
+export class SortTracer extends StepTracer<SortStep> {
+  constructor(private readonly array: number[]) {
+    super();
   }
 
   /** Read the live working value (algorithms read through the tracer). */
@@ -29,7 +26,7 @@ export class SortTracer {
   }
 
   compare(a: number, b: number, note?: string): void {
-    this._steps.push({ kind: SortStepKind.Compare, a, b, note });
+    this.record({ kind: SortStepKind.Compare, a, b, note });
   }
 
   /** Swap two cells and record it. */
@@ -37,24 +34,24 @@ export class SortTracer {
     const tmp = this.array[a];
     this.array[a] = this.array[b];
     this.array[b] = tmp;
-    this._steps.push({ kind: SortStepKind.Swap, a, b, note });
+    this.record({ kind: SortStepKind.Swap, a, b, note });
   }
 
   /** Overwrite a single cell (used by distributive/merge-style writes). */
   overwrite(i: number, value: number, note?: string): void {
     this.array[i] = value;
-    this._steps.push({ kind: SortStepKind.Overwrite, a: i, value, note });
+    this.record({ kind: SortStepKind.Overwrite, a: i, value, note });
   }
 
   select(i: number, role?: string, note?: string): void {
-    this._steps.push({ kind: SortStepKind.Select, a: i, role, note });
+    this.record({ kind: SortStepKind.Select, a: i, role, note });
   }
 
   deselect(i: number, note?: string): void {
-    this._steps.push({ kind: SortStepKind.Deselect, a: i, note });
+    this.record({ kind: SortStepKind.Deselect, a: i, note });
   }
 
   markSorted(i: number, note?: string): void {
-    this._steps.push({ kind: SortStepKind.MarkSorted, a: i, note });
+    this.record({ kind: SortStepKind.MarkSorted, a: i, note });
   }
 }

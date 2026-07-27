@@ -4,17 +4,29 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { SCENE } from '@/theme';
+import { SCENE_THEMES, type SceneTheme } from '@/theme';
+import type { FrameContext as BaseFrameContext, RenderBackend } from '../backend/RenderBackend';
 
-/** Per-frame context handed to every tick subscriber. */
-export interface FrameContext {
-  /** Seconds since the previous frame (clamped). */
-  readonly dt: number;
-  /** Seconds since the engine started. */
-  readonly elapsed: number;
+/**
+ * Per-frame context handed to every tick subscriber.
+ *
+ * Extends the backend-neutral {@link BaseFrameContext} with the WebGL specifics
+ * visualizers need. The name is kept (rather than renamed to `WebGLFrameContext`)
+ * because every existing visualizer imports it from this module.
+ */
+export interface FrameContext extends BaseFrameContext {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
 }
+
+/** Alias for code that wants to be explicit about which backend it is on. */
+export type WebGLFrameContext = FrameContext;
+
+/** How a touch device is allowed to drive the camera. */
+export type TouchMode = 'one-finger' | 'two-finger' | 'off';
+
+/** Coarse rendering quality tier, chosen from the device's capabilities. */
+export type QualityTier = 'low' | 'high';
 
 export interface EngineOptions {
   /** Bloom strength; 0 disables the glow. */
@@ -27,6 +39,18 @@ export interface EngineOptions {
   autoRotate?: boolean;
   cameraPosition?: [number, number, number];
   cameraTarget?: [number, number, number];
+  /** Upper bound on `devicePixelRatio`. Lower it on weak GPUs. */
+  pixelRatioCap?: number;
+  /** Run the bloom/output composer. Disabling renders direct — much cheaper. */
+  postProcessing?: boolean;
+  antialias?: boolean;
+  /**
+   * Touch gesture policy. `two-finger` leaves one-finger drag to the page, which
+   * is what keeps a phone able to scroll past a full-bleed canvas.
+   */
+  touchMode?: TouchMode;
+  /** Initial colour scheme; switch later with {@link VisualizationEngine.setTheme}. */
+  theme?: SceneTheme;
 }
 
 type TickFn = (ctx: FrameContext) => void;
@@ -40,8 +64,11 @@ type TickFn = (ctx: FrameContext) => void;
  *
  * Lifecycle: `new` → `mount(container)` → … → `dispose()`. All GPU resources are
  * released on dispose, and a ResizeObserver keeps the framebuffer crisp.
+ *
+ * Implements {@link RenderBackend} so the React bridge can hold it and the 2D
+ * backend interchangeably.
  */
-export class VisualizationEngine {
+export class VisualizationEngine implements RenderBackend<FrameContext> {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
 
@@ -56,9 +83,17 @@ export class VisualizationEngine {
   private lastTime = 0;
   private elapsed = 0;
   private running = false;
+  private disposed = false;
+  private paused = false;
+
+  private theme: SceneTheme;
+  private ambient: THREE.AmbientLight | null = null;
+  private keyLight: THREE.DirectionalLight | null = null;
+  private rimLight: THREE.DirectionalLight | null = null;
+  private fillLight: THREE.PointLight | null = null;
 
   private readonly tickFns = new Set<TickFn>();
-  private readonly options: Required<EngineOptions>;
+  private readonly options: Required<Omit<EngineOptions, 'theme'>>;
 
   constructor(options: EngineOptions = {}) {
     this.options = {
@@ -69,21 +104,28 @@ export class VisualizationEngine {
       autoRotate: options.autoRotate ?? false,
       cameraPosition: options.cameraPosition ?? [0, 26, 62],
       cameraTarget: options.cameraTarget ?? [0, 9, 0],
+      pixelRatioCap: options.pixelRatioCap ?? 2,
+      postProcessing: options.postProcessing ?? true,
+      antialias: options.antialias ?? true,
+      touchMode: options.touchMode ?? 'one-finger',
     };
+    this.theme = options.theme ?? SCENE_THEMES.dark;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(SCENE.background);
-    this.scene.fog = new THREE.Fog(SCENE.fog, 70, 180);
+    this.scene.background = new THREE.Color(this.theme.background);
+    this.scene.fog = new THREE.Fog(this.theme.fog, 70, 180);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
     this.camera.position.set(...this.options.cameraPosition);
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: this.options.antialias,
       alpha: true,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
+    this.renderer.setPixelRatio(
+      Math.min(globalThis.devicePixelRatio ?? 1, this.options.pixelRatioCap),
+    );
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
@@ -92,7 +134,7 @@ export class VisualizationEngine {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(1, 1),
-      this.options.bloomStrength,
+      this.options.bloomStrength * this.theme.bloomScale,
       this.options.bloomRadius,
       this.options.bloomThreshold,
     );
@@ -104,6 +146,7 @@ export class VisualizationEngine {
 
   /** Attach the canvas to the DOM, wire resize, and start the loop. */
   mount(container: HTMLElement): void {
+    if (this.disposed) return;
     this.container = container;
     container.appendChild(this.renderer.domElement);
     Object.assign(this.renderer.domElement.style, {
@@ -123,6 +166,7 @@ export class VisualizationEngine {
       controls.autoRotate = this.options.autoRotate;
       controls.autoRotateSpeed = 0.6;
       controls.target.set(...this.options.cameraTarget);
+      this.applyTouchMode(controls);
       controls.update();
       this.controls = controls;
     } else {
@@ -141,8 +185,74 @@ export class VisualizationEngine {
     return () => this.tickFns.delete(fn);
   }
 
-  /** Tear down all GPU + DOM resources. Safe to call once. */
+  /**
+   * Recolour the scene in place for a light/dark switch.
+   *
+   * Materials owned by attached visualizers are *not* touched here — each
+   * `Visualizer.setTheme` handles its own meshes — so this only covers the
+   * scene-level concerns the engine owns: backdrop, fog, lights and bloom.
+   */
+  setTheme(theme: SceneTheme): void {
+    this.theme = theme;
+    (this.scene.background as THREE.Color | null)?.set(theme.background);
+    if (this.scene.fog) (this.scene.fog as THREE.Fog).color.set(theme.fog);
+    if (this.ambient) this.ambient.intensity = theme.ambientIntensity;
+    this.keyLight?.color.set(theme.keyLight);
+    this.rimLight?.color.set(theme.rimLight);
+    this.fillLight?.color.set(theme.rimLight);
+    this.bloomPass.strength = this.options.bloomStrength * theme.bloomScale;
+  }
+
+  /** The palette the scene is currently rendering with. */
+  getTheme(): SceneTheme {
+    return this.theme;
+  }
+
+  /**
+   * Drop to a cheaper rendering profile on weak hardware.
+   *
+   * Post-processing is the expensive part — a phone GPU spends more on the
+   * bloom passes than on the whole scene — so `low` skips the composer entirely
+   * and renders direct.
+   */
+  setQuality(tier: QualityTier): void {
+    if (tier === 'low') {
+      this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 1.5));
+      this.options.postProcessing = false;
+    } else {
+      this.renderer.setPixelRatio(
+        Math.min(globalThis.devicePixelRatio ?? 1, this.options.pixelRatioCap),
+      );
+      this.options.postProcessing = true;
+    }
+    this.resize();
+  }
+
+  /** Enable/disable camera interaction — used by the mobile "Interact" toggle. */
+  setControlsEnabled(enabled: boolean): void {
+    if (this.controls) this.controls.enabled = enabled;
+  }
+
+  /** Change the touch gesture policy after mount. */
+  setTouchMode(mode: TouchMode): void {
+    this.options.touchMode = mode;
+    if (this.controls) this.applyTouchMode(this.controls);
+  }
+
+  /**
+   * Freeze the loop without tearing down. Driven by an IntersectionObserver on
+   * the stage and by `visibilitychange`, which together are the single biggest
+   * battery win on mobile.
+   */
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (!paused) this.lastTime = performance.now();
+  }
+
+  /** Tear down all GPU + DOM resources. Safe to call more than once. */
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.stop();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
@@ -151,6 +261,10 @@ export class VisualizationEngine {
     this.tickFns.clear();
 
     this.disposeSceneGraph();
+    this.ambient = null;
+    this.keyLight = null;
+    this.rimLight = null;
+    this.fillLight = null;
     this.composer.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {
@@ -162,14 +276,48 @@ export class VisualizationEngine {
   // ── Internals ───────────────────────────────────────────────────────
 
   private setupLighting(): void {
-    const ambient = new THREE.AmbientLight(0xffffff, 0.35);
-    const key = new THREE.DirectionalLight(SCENE.keyLight, 1.1);
+    const ambient = new THREE.AmbientLight(0xffffff, this.theme.ambientIntensity);
+    const key = new THREE.DirectionalLight(this.theme.keyLight, 1.1);
     key.position.set(18, 40, 28);
-    const rim = new THREE.DirectionalLight(SCENE.rimLight, 0.8);
+    const rim = new THREE.DirectionalLight(this.theme.rimLight, 0.8);
     rim.position.set(-24, 16, -18);
-    const fill = new THREE.PointLight(SCENE.rimLight, 0.5, 220);
+    const fill = new THREE.PointLight(this.theme.rimLight, 0.5, 220);
     fill.position.set(0, 30, 40);
+
+    // Held as fields so `setTheme` can recolour them without a scene rebuild.
+    this.ambient = ambient;
+    this.keyLight = key;
+    this.rimLight = rim;
+    this.fillLight = fill;
     this.scene.add(ambient, key, rim, fill);
+  }
+
+  /**
+   * Map the touch policy onto OrbitControls' gesture table.
+   *
+   * `two-finger` is the important one: it leaves single-finger drag unclaimed so
+   * the browser can scroll the page, which is the difference between a canvas
+   * that traps the user and one that doesn't.
+   */
+  private applyTouchMode(controls: OrbitControls): void {
+    switch (this.options.touchMode) {
+      case 'one-finger':
+        controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
+        break;
+      case 'two-finger':
+        // `undefined` = gesture not handled, so the event falls through to the page.
+        controls.touches = {
+          ONE: undefined as unknown as THREE.TOUCH,
+          TWO: THREE.TOUCH.DOLLY_ROTATE,
+        };
+        break;
+      case 'off':
+        controls.touches = {
+          ONE: undefined as unknown as THREE.TOUCH,
+          TWO: undefined as unknown as THREE.TOUCH,
+        };
+        break;
+    }
   }
 
   private start(): void {
@@ -180,12 +328,20 @@ export class VisualizationEngine {
       if (!this.running) return;
       const dt = Math.min((now - this.lastTime) / 1000, 0.1);
       this.lastTime = now;
-      this.elapsed += dt;
 
-      this.controls?.update();
-      const ctx: FrameContext = { dt, elapsed: this.elapsed, scene: this.scene, camera: this.camera };
-      this.tickFns.forEach((fn) => fn(ctx));
-      this.composer.render();
+      if (!this.paused) {
+        this.elapsed += dt;
+        this.controls?.update();
+        const ctx: FrameContext = {
+          dt,
+          elapsed: this.elapsed,
+          scene: this.scene,
+          camera: this.camera,
+        };
+        this.tickFns.forEach((fn) => fn(ctx));
+        if (this.options.postProcessing) this.composer.render();
+        else this.renderer.render(this.scene, this.camera);
+      }
 
       this.rafId = requestAnimationFrame(loop);
     };

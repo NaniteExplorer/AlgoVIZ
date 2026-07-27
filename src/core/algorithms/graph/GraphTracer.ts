@@ -1,3 +1,4 @@
+import { StepTracer } from '../StepTracer';
 import { type GraphInput, type GraphStep, GraphStepKind } from './GraphStep';
 
 interface Adj {
@@ -11,11 +12,11 @@ interface Adj {
  * records the step timeline through intention-revealing methods. Neighbours are
  * returned in a stable (ascending) order so runs are deterministic.
  */
-export class GraphTracer {
-  private readonly _steps: GraphStep[] = [];
+export class GraphTracer extends StepTracer<GraphStep> {
   private readonly adjacency: Adj[][];
 
   constructor(private readonly input: GraphInput) {
+    super();
     this.adjacency = input.nodes.map(() => []);
     for (const { u, v, w } of input.edges) {
       this.adjacency[u].push({ to: v, w });
@@ -24,9 +25,6 @@ export class GraphTracer {
     for (const list of this.adjacency) list.sort((a, b) => a.to - b.to);
   }
 
-  get steps(): readonly GraphStep[] {
-    return this._steps;
-  }
   get size(): number {
     return this.input.nodes.length;
   }
@@ -50,24 +48,78 @@ export class GraphTracer {
 
   // ── Step recorders ──────────────────────────────────────────────────
   frontier(node: number, note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Frontier, node, note });
+    this.record({ kind: GraphStepKind.Frontier, node, note });
   }
   visit(node: number, note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Visit, node, note });
+    this.record({ kind: GraphStepKind.Visit, node, note });
   }
   explore(from: number, to: number, note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Explore, from, to, note });
+    this.record({ kind: GraphStepKind.Explore, from, to, note });
   }
   relax(from: number, to: number, dist: number, note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Relax, from, to, dist, note });
+    this.record({ kind: GraphStepKind.Relax, from, to, dist, note });
   }
   settle(node: number, note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Settle, node, note });
+    this.record({ kind: GraphStepKind.Settle, node, note });
   }
   path(node: number, from?: number, note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Path, node, from, note });
+    this.record({ kind: GraphStepKind.Path, node, from, note });
   }
   done(note?: string): void {
-    this._steps.push({ kind: GraphStepKind.Done, note });
+    this.record({ kind: GraphStepKind.Done, note });
+  }
+
+  // ── Advanced-graph recorders ────────────────────────────────────────
+
+  /** Keep an edge in the result set (MST edge, flow path edge). */
+  selectEdge(from: number, to: number, note?: string): void {
+    this.record({ kind: GraphStepKind.SelectEdge, from, to, note });
+  }
+  /** Discard an edge for good. */
+  rejectEdge(from: number, to: number, note?: string): void {
+    this.record({ kind: GraphStepKind.RejectEdge, from, to, note });
+  }
+  /** Introduce an edge not present in the input (a DSU parent pointer). */
+  addEdge(from: number, to: number, note?: string): void {
+    this.record({ kind: GraphStepKind.AddEdge, from, to, note });
+  }
+  /** Colour a node by component. */
+  group(node: number, group: number, note?: string): void {
+    this.record({ kind: GraphStepKind.Group, node, group, note });
+  }
+  /** Append a node to the ordered output. */
+  emit(node: number, note?: string): void {
+    this.record({ kind: GraphStepKind.Emit, node, note });
+  }
+  /** Push flow along an edge. */
+  flow(from: number, to: number, amount: number, capacity?: number, note?: string): void {
+    this.record({ kind: GraphStepKind.Flow, from, to, amount, capacity, note });
+  }
+  /** Report an impossibility: a negative cycle, or a cycle in a "DAG". */
+  fail(note?: string): void {
+    this.record({ kind: GraphStepKind.Fail, note });
+  }
+
+  /**
+   * Directed adjacency, for algorithms where direction matters.
+   *
+   * {@link neighbors} deliberately returns the undirected view the original
+   * four search algorithms were written against; topological sort and SCC need
+   * the real out-edges, so they read this instead.
+   */
+  outEdges(u: number): readonly Adj[] {
+    return this.input.edges
+      .filter((e) => e.u === u)
+      .map((e) => ({ to: e.v, w: e.w }))
+      .sort((a, b) => a.to - b.to);
+  }
+
+  /** Every edge in the instance, in input order. */
+  get allEdges(): readonly { u: number; v: number; w: number }[] {
+    return this.input.edges;
+  }
+
+  get isDirected(): boolean {
+    return this.input.directed === true;
   }
 }

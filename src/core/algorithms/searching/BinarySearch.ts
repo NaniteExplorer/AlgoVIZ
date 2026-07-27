@@ -22,21 +22,21 @@ export class BinarySearch extends SearchingAlgorithm {
 
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      t.bounds(lo, hi);
-      t.probe(mid);
+      t.at(2).bounds(lo, hi);
+      t.at(3).probe(mid);
       const v = t.value(mid);
       if (v === t.target) {
-        t.found(mid, `found the target at index ${mid}`);
+        t.at(4).found(mid, `found the target at index ${mid}`);
         return;
       }
       if (v < t.target) {
-        t.eliminate(lo, mid, 'target is larger → discard the left half');
+        t.at(6).eliminate(lo, mid, 'target is larger → discard the left half');
         lo = mid + 1;
       } else {
-        t.eliminate(mid, hi, 'target is smaller → discard the right half');
+        t.at(8).eliminate(mid, hi, 'target is smaller → discard the right half');
         hi = mid - 1;
       }
     }
-    t.exhausted('window is empty — target is absent');
+    t.at(9).exhausted('window is empty — target is absent');
   }
 }

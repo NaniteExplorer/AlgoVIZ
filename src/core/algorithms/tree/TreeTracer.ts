@@ -1,3 +1,4 @@
+import { StepTracer } from '../StepTracer';
 import { type TreeData, type TreeStep, TreeStepKind } from './TreeStep';
 
 /**
@@ -5,14 +6,11 @@ import { type TreeData, type TreeStep, TreeStepKind } from './TreeStep';
  * {@link TreeData} (structure + layout) and exposes child/value queries plus
  * step recorders, so algorithms read like their textbook pseudocode.
  */
-export class TreeTracer {
-  private readonly _steps: TreeStep[] = [];
-
-  constructor(private readonly data: TreeData) {}
-
-  get steps(): readonly TreeStep[] {
-    return this._steps;
+export class TreeTracer extends StepTracer<TreeStep> {
+  constructor(private readonly data: TreeData) {
+    super();
   }
+
   get root(): number | null {
     return this.data.root;
   }
@@ -35,24 +33,24 @@ export class TreeTracer {
 
   // ── Step recorders ──────────────────────────────────────────────────
   revealAll(note?: string): void {
-    this._steps.push({ kind: TreeStepKind.RevealAll, note });
+    this.record({ kind: TreeStepKind.RevealAll, note });
   }
   reveal(node: number, note?: string): void {
-    this._steps.push({ kind: TreeStepKind.Reveal, node, note });
+    this.record({ kind: TreeStepKind.Reveal, node, note });
   }
   compare(node: number, note?: string): void {
-    this._steps.push({ kind: TreeStepKind.Compare, node, note });
+    this.record({ kind: TreeStepKind.Compare, node, note });
   }
   visit(node: number, note?: string): void {
-    this._steps.push({ kind: TreeStepKind.Visit, node, note });
+    this.record({ kind: TreeStepKind.Visit, node, note });
   }
   found(node: number, note?: string): void {
-    this._steps.push({ kind: TreeStepKind.Found, node, note });
+    this.record({ kind: TreeStepKind.Found, node, note });
   }
   notFound(note?: string): void {
-    this._steps.push({ kind: TreeStepKind.NotFound, note });
+    this.record({ kind: TreeStepKind.NotFound, note });
   }
   done(note?: string): void {
-    this._steps.push({ kind: TreeStepKind.Done, note });
+    this.record({ kind: TreeStepKind.Done, note });
   }
 }

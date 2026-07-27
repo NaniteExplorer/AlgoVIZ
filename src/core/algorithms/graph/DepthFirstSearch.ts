@@ -7,6 +7,7 @@ export class DepthFirstSearch extends GraphAlgorithm {
     id: 'dfs',
     name: 'Depth-First Search',
     category: GRAPH_CATEGORY,
+    group: 'Traversal',
     description:
       'Plunges as deep as possible along each branch before backtracking, using a stack (here, the call stack). Great for connectivity, cycle detection and topological order — but the path it finds is not necessarily the shortest.',
     complexity: {

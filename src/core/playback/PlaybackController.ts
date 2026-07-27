@@ -32,6 +32,11 @@ export interface PlaybackSnapshot {
   progress: number;
   /** Narration attached to the current step, if any. */
   note?: string;
+  /**
+   * Pseudocode line the current step is executing, if the algorithm has been
+   * annotated. `undefined` means "no listing" and the pane stays hidden.
+   */
+  line?: number;
   /** Live counters pulled from the model (comparisons, swaps, writes, …). */
   metrics: Record<string, number>;
 }
@@ -41,6 +46,17 @@ export interface PlaybackOptions<TStep> {
   getMetrics: () => Record<string, number>;
   /** Extract a narration string from a step (kept generic over TStep). */
   getNote?: (step: TStep) => string | undefined;
+  /** Extract the pseudocode line a step executes, for the synced code pane. */
+  getLine?: (step: TStep) => number | undefined;
+  /**
+   * Observe every step as it is applied, in cursor order.
+   *
+   * Used to capture the metric time-series that powers the complexity charts.
+   * Fires on forward playback, single-stepping and replay alike, so the series
+   * is filled the first time each cursor is reached regardless of how the user
+   * got there.
+   */
+  onStepApplied?: (cursor: number, step: TStep) => void;
   /** Initial speed in steps/sec. */
   speed?: number;
   minSpeed?: number;
@@ -121,7 +137,7 @@ export class PlaybackController<TStep> {
       return;
     }
     this.cursor += 1;
-    this.model.apply(this.steps[this.cursor]);
+    this.applyAt(this.cursor);
     this.status = this.cursor >= this.steps.length - 1 ? 'complete' : 'paused';
     this.invalidate();
   }
@@ -168,13 +184,18 @@ export class PlaybackController<TStep> {
         break;
       }
       this.cursor += 1;
-      this.model.apply(this.steps[this.cursor]);
+      this.applyAt(this.cursor);
       this.accumulatorMs -= msPerStep;
       applied = true;
     }
 
     if (applied) this.invalidate();
     return applied;
+  }
+
+  /** True once the final step has been applied. Used by the race view. */
+  get isComplete(): boolean {
+    return this.status === 'complete';
   }
 
   // ── Observable store (useSyncExternalStore-compatible) ──────────────
@@ -193,9 +214,23 @@ export class PlaybackController<TStep> {
 
   private replayTo(index: number): void {
     this.model.rewind();
-    for (let i = 0; i <= index; i += 1) this.model.apply(this.steps[i]);
+    for (let i = 0; i <= index; i += 1) this.applyAt(i);
     this.cursor = index;
     this.accumulatorMs = 0;
+  }
+
+  /**
+   * The single place a step is ever applied.
+   *
+   * Funnelling `stepForward`, the play loop and `replayTo` through here is what
+   * guarantees `onStepApplied` sees every cursor exactly as the model does —
+   * important because scrubbing backwards replays from the start, and a
+   * half-wired observer would end up with a series full of holes.
+   */
+  private applyAt(index: number): void {
+    const step = this.steps[index];
+    this.model.apply(step);
+    this.options.onStepApplied?.(index, step);
   }
 
   private buildSnapshot(): PlaybackSnapshot {
@@ -208,6 +243,7 @@ export class PlaybackController<TStep> {
       speed: this.speed,
       progress: total ? (this.cursor + 1) / total : 0,
       note: current ? this.options.getNote?.(current) : undefined,
+      line: current ? this.options.getLine?.(current) : undefined,
       metrics: this.options.getMetrics(),
     };
   }

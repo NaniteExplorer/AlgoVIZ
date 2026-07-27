@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { SceneTheme } from '@/theme';
+import type { Renderable } from './backend/RenderBackend';
 import type { FrameContext, VisualizationEngine } from './engine/VisualizationEngine';
 
 /**
@@ -10,10 +12,12 @@ import type { FrameContext, VisualizationEngine } from './engine/VisualizationEn
  * disposed automatically when the visualizer detaches. They implement three
  * hooks: build on attach, animate per frame, release on dispose.
  */
-export abstract class Visualizer {
+export abstract class Visualizer implements Renderable<VisualizationEngine> {
   protected readonly group = new THREE.Group();
   protected engine: VisualizationEngine | null = null;
   private unsubscribe: (() => void) | null = null;
+  private floorMaterial: THREE.MeshStandardMaterial | null = null;
+  private gridHelper: THREE.GridHelper | null = null;
 
   /** Wire this visualizer into a running engine. */
   attach(engine: VisualizationEngine): void {
@@ -31,7 +35,41 @@ export abstract class Visualizer {
     this.onDispose();
     if (this.engine) this.engine.scene.remove(this.group);
     this.disposeGroup();
+    this.floorMaterial = null;
+    this.gridHelper = null;
     this.engine = null;
+  }
+
+  /**
+   * Re-colour existing meshes for a light/dark switch.
+   *
+   * The base implementation handles the shared "stage furniture" — floor plane
+   * and grid — which every 3D family builds the same way. Families with themed
+   * content of their own (bars, nodes, edges) override this and call `super`.
+   *
+   * Implementations must mutate materials in place: a geometry rebuild here
+   * would drop every in-flight tween and make a theme switch look like a reset.
+   */
+  setTheme(theme: SceneTheme): void {
+    this.floorMaterial?.color.set(theme.floor);
+    if (this.gridHelper) {
+      const material = this.gridHelper.material as THREE.Material & { color?: THREE.Color };
+      material.color?.set(theme.grid);
+    }
+  }
+
+  /**
+   * Record the stage furniture so {@link setTheme} can recolour it.
+   *
+   * Called from each family's environment builder. Without this, a theme switch
+   * would leave a black floor sitting under a light-mode scene.
+   */
+  protected registerEnvironment(
+    floorMaterial: THREE.MeshStandardMaterial | null,
+    grid: THREE.GridHelper | null,
+  ): void {
+    this.floorMaterial = floorMaterial;
+    this.gridHelper = grid;
   }
 
   // ── Subclass contract ───────────────────────────────────────────────

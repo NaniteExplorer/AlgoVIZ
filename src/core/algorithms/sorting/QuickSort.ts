@@ -27,7 +27,7 @@ export class QuickSort extends SortingAlgorithm {
       return;
     }
     const p = this.partition(t, lo, hi);
-    t.markSorted(p);
+    t.at(3).markSorted(p);
     this.quickSort(t, lo, p - 1);
     this.quickSort(t, p + 1, hi);
   }
@@ -35,17 +35,17 @@ export class QuickSort extends SortingAlgorithm {
   /** Lomuto partition using the high element as pivot. */
   private partition(t: SortTracer, lo: number, hi: number): number {
     const pivot = t.value(hi);
-    t.select(hi, 'pivot', 'choose pivot');
+    t.at(8).select(hi, 'pivot', 'choose pivot');
     let i = lo - 1;
     for (let j = lo; j < hi; j += 1) {
-      t.compare(j, hi);
+      t.at(11).compare(j, hi);
       if (t.value(j) < pivot) {
         i += 1;
-        if (i !== j) t.swap(i, j);
+        if (i !== j) t.at(12).swap(i, j);
       }
     }
-    t.deselect(hi);
-    if (i + 1 !== hi) t.swap(i + 1, hi);
+    t.at(13).deselect(hi);
+    if (i + 1 !== hi) t.at(13).swap(i + 1, hi);
     return i + 1;
   }
 }

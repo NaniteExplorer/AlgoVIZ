@@ -3,7 +3,8 @@ import { buildBST } from '@/core/algorithms/tree/buildTree';
 import { describeTreeStep } from '@/core/algorithms/tree/describe';
 import type { TreeData, TreeStep } from '@/core/algorithms/tree/TreeStep';
 import { TreeModel } from '@/core/model/TreeModel';
-import { CategoryModule, type ControlSpec, type LegendItem, type MetricSpec } from '../CategoryModule';
+import type { ControlSpec, LegendItem, MetricSpec } from '../CategoryModule';
+import { WebGLCategoryModule } from '../WebGLCategoryModule';
 import type { EngineOptions } from '../engine/VisualizationEngine';
 import { TREE_LEGEND, TREE_NODE_STYLES } from './palette';
 import { TreeVisualizer } from './TreeVisualizer';
@@ -28,8 +29,24 @@ function makeTree(n: number): TreeData {
   return buildBST(values, target);
 }
 
+/**
+ * Deep copy of a tree instance.
+ *
+ * `TreeNode` carries mutable layout fields (`x`, `y`, `depth`), so a shallow
+ * copy would let one consumer's re-layout bleed into another's — exactly the
+ * bug the race view would hit when several lanes share an instance.
+ */
+function cloneTree(data: TreeData): TreeData {
+  return {
+    nodes: data.nodes.map((n) => ({ ...n })),
+    root: data.root,
+    order: [...data.order],
+    target: data.target,
+  };
+}
+
 /** Tree family driver. */
-export class TreeModule extends CategoryModule<TreeStep> {
+export class TreeModule extends WebGLCategoryModule<TreeStep, TreeData> {
   readonly engineOptions: EngineOptions = {
     enableControls: true,
     autoRotate: false,
@@ -70,6 +87,15 @@ export class TreeModule extends CategoryModule<TreeStep> {
 
   buildTimeline(algorithm: AnyAlgorithm): TreeStep[] {
     return (algorithm as { run(input: TreeData): TreeStep[] }).run(this.input);
+  }
+
+  getInstance(): TreeData {
+    return cloneTree(this.input);
+  }
+
+  setInstance(input: TreeData): void {
+    this.input = cloneTree(input);
+    this.model.reset(this.input);
   }
 
   describe(step: TreeStep): string {

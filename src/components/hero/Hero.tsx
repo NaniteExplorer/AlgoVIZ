@@ -1,43 +1,16 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { algorithmRegistry } from '@/core/algorithms';
-import { VisualizationEngine } from '@/core/visualization/engine/VisualizationEngine';
-import { HeroVisualizer } from '@/core/visualization/hero/HeroVisualizer';
+
+// Client-only: keeps Three.js out of the marketing page's server bundle.
+const HeroCanvas = dynamic(() => import('./HeroCanvas'), { ssr: false });
 
 /**
- * Full-bleed AlgoViz hero. Mounts a dedicated `VisualizationEngine` configured
- * for an idle, auto-rotating scene (no user controls, stronger bloom), with the
- * brand wordmark, live platform stats and CTAs layered above the canvas.
+ * Full-bleed AlgoViz hero: an idle 3D scene with the brand wordmark, live
+ * platform stats and CTAs layered above it.
  */
 export function Hero() {
-  const canvasRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const container = canvasRef.current;
-    if (!container) return;
-
-    const engine = new VisualizationEngine({
-      enableControls: false,
-      autoRotate: false,
-      // Restrained bloom: enough to make the nodes glow, not so much that the
-      // scene blooms into a white wash behind the wordmark.
-      bloomStrength: 0.55,
-      bloomRadius: 0.6,
-      bloomThreshold: 0.22,
-      cameraPosition: [0, 4, 64],
-      cameraTarget: [0, 0, 0],
-    });
-    engine.mount(container);
-    const visualizer = new HeroVisualizer();
-    visualizer.attach(engine);
-
-    return () => {
-      visualizer.detach();
-      engine.dispose();
-    };
-  }, []);
-
   const algorithmCount = algorithmRegistry.list().length;
   const familyCount = algorithmRegistry.categories().length;
 
@@ -50,7 +23,7 @@ export function Hero() {
       id="top"
       className="relative flex h-[100svh] min-h-[640px] w-full items-center justify-center overflow-hidden"
     >
-      <div ref={canvasRef} className="absolute inset-0" aria-hidden />
+      <HeroCanvas />
 
       {/* Layered legibility scrim: a soft central pool lifts contrast behind the
           wordmark, an edge vignette frames the scene, and a bottom fade hands off
@@ -72,7 +45,7 @@ export function Hero() {
         </h1>
 
         <p
-          className="mt-5 max-w-xl animate-fade-up text-base leading-relaxed text-slate-400 md:text-lg"
+          className="mt-5 max-w-xl animate-fade-up text-base leading-relaxed text-content-muted md:text-lg"
           style={{ animationDelay: '0.16s' }}
         >
           An interactive 3D playground for sorting, searching, graph and tree algorithms.
@@ -93,14 +66,14 @@ export function Hero() {
           </button>
           <a
             href="#families"
-            className="rounded-xl border border-surface-700 px-7 py-3 font-medium text-slate-300 transition-colors hover:bg-surface-800"
+            className="rounded-xl border border-surface-700 px-7 py-3 font-medium text-content-secondary transition-colors hover:bg-surface-800"
           >
             Browse Families
           </a>
         </div>
 
         <div
-          className="mt-12 flex animate-fade-up items-center gap-8 font-mono text-sm text-slate-400"
+          className="mt-12 flex animate-fade-up items-center gap-8 font-mono text-sm text-content-muted"
           style={{ animationDelay: '0.32s' }}
         >
           <Stat value={`${algorithmCount}`} label="algorithms" />
@@ -117,7 +90,7 @@ export function Hero() {
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <span className="flex flex-col items-center">
-      <span className="text-2xl font-semibold text-slate-100">{value}</span>
+      <span className="text-2xl font-semibold text-content-primary">{value}</span>
       <span className="text-xs uppercase tracking-wider">{label}</span>
     </span>
   );

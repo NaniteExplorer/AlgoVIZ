@@ -6,6 +6,8 @@
  * describe the *active window* under consideration, the *probe* currently being
  * compared to the target, ranges being *eliminated*, and the terminal outcome.
  */
+import type { TracedStep } from '../types';
+
 export enum SearchStepKind {
   /** Narrow the active candidate window to [lo, hi]. */
   Bounds = 'bounds',
@@ -19,7 +21,7 @@ export enum SearchStepKind {
   Exhausted = 'exhausted',
 }
 
-export interface SearchStep {
+export interface SearchStep extends TracedStep {
   readonly kind: SearchStepKind;
   readonly index?: number;
   readonly lo?: number;

@@ -7,6 +7,7 @@ export class AStar extends GraphAlgorithm {
     id: 'a-star',
     name: 'A* Search',
     category: GRAPH_CATEGORY,
+    group: 'Shortest Path',
     description:
       "Dijkstra's guided by a heuristic: it settles the node with the smallest f = g + h, where g is the cost so far and h is the straight-line distance to the goal. With an admissible heuristic it finds the optimal path while exploring far fewer nodes.",
     complexity: {

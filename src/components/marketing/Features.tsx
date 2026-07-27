@@ -38,7 +38,7 @@ export function Features() {
   return (
     <section id="learn" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-20">
       <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">How it works</p>
-      <h2 className="mt-2 text-3xl font-semibold text-slate-100 md:text-4xl">
+      <h2 className="mt-2 text-3xl font-semibold text-content-primary md:text-4xl">
         A studio built for understanding
       </h2>
 
@@ -48,8 +48,8 @@ export function Features() {
             key={f.title}
             className="flex flex-col gap-2 rounded-2xl border border-surface-700 bg-surface-900/50 p-6 transition-colors hover:border-surface-600"
           >
-            <h3 className="text-base font-semibold text-slate-100">{f.title}</h3>
-            <p className="text-sm leading-relaxed text-slate-400">{f.body}</p>
+            <h3 className="text-base font-semibold text-content-primary">{f.title}</h3>
+            <p className="text-sm leading-relaxed text-content-muted">{f.body}</p>
           </div>
         ))}
       </div>

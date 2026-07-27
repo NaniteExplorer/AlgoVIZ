@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { Visualizer } from '../Visualizer';
 import type { FrameContext, VisualizationEngine } from '../engine/VisualizationEngine';
 import { ArrayModel } from '@/core/model/ArrayModel';
-import { ROLE_STYLES, SCENE } from '@/theme';
+import { roleStyles, SCENE_THEMES, type RoleStyle, type SceneTheme } from '@/theme';
+import type { CellRole } from '@/core/model/ArrayModel';
 import { Bar } from '../primitives/Bar';
 
 /**
@@ -23,8 +24,25 @@ export class SortingVisualizer extends Visualizer {
   private bars: Bar[] = [];
   private sharedGeometry: THREE.BoxGeometry | null = null;
 
+  private theme: SceneTheme = SCENE_THEMES.dark;
+  private styles: Record<CellRole, RoleStyle> = roleStyles('dark');
+
   constructor(private readonly model: ArrayModel) {
     super();
+  }
+
+  /**
+   * Swap palettes without rebuilding anything.
+   *
+   * Bars already ease toward whatever `setTargetStyle` was last handed, so
+   * changing `this.styles` makes the whole array cross-fade to the new theme
+   * over the next few frames rather than snapping — which is exactly the
+   * behaviour we'd have had to hand-write if colours were baked in at build.
+   */
+  override setTheme(theme: SceneTheme): void {
+    super.setTheme(theme);
+    this.theme = theme;
+    this.styles = roleStyles(theme.mode);
   }
 
   protected onAttach(_engine: VisualizationEngine): void {
@@ -38,7 +56,7 @@ export class SortingVisualizer extends Visualizer {
     const { maxValue } = this.model;
     for (let i = 0; i < this.bars.length; i += 1) {
       const target = (this.model.value(i) / maxValue) * SortingVisualizer.MAX_HEIGHT;
-      const style = ROLE_STYLES[this.model.roleAt(i)];
+      const style = this.styles[this.model.roleAt(i)];
       const bar = this.bars[i];
       bar.setTargetHeight(target);
       bar.setTargetStyle(style.color, style.emissive);
@@ -81,21 +99,20 @@ export class SortingVisualizer extends Visualizer {
 
   /** Floor plane + grid that grounds the bars and catches the bloom glow. */
   private buildEnvironment(): void {
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(260, 260),
-      new THREE.MeshStandardMaterial({
-        color: SCENE.floor,
-        roughness: 0.6,
-        metalness: 0.4,
-      }),
-    );
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: this.theme.floor,
+      roughness: 0.6,
+      metalness: 0.4,
+    });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.02;
 
-    const grid = new THREE.GridHelper(220, 60, SCENE.grid, SCENE.grid);
+    const grid = new THREE.GridHelper(220, 60, this.theme.grid, this.theme.grid);
     (grid.material as THREE.Material).opacity = 0.25;
     (grid.material as THREE.Material).transparent = true;
 
+    this.registerEnvironment(floorMaterial, grid);
     this.group.add(floor, grid);
   }
 }

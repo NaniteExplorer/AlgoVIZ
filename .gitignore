@@ -28,3 +28,6 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Compiled output for the correctness suite (npm run verify)
+.verify-build/

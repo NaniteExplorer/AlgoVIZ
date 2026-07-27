@@ -4,6 +4,8 @@
  * precomputed; steps then drive node *visibility* (insertion reveals nodes one
  * at a time) and *highlighting* (descent comparisons, traversal visits).
  */
+import type { TracedStep } from '../types';
+
 export enum TreeStepKind {
   /** Reveal the entire pre-built tree at once (search / traversal intro). */
   RevealAll = 'reveal-all',
@@ -21,7 +23,7 @@ export enum TreeStepKind {
   Done = 'done',
 }
 
-export interface TreeStep {
+export interface TreeStep extends TracedStep {
   readonly kind: TreeStepKind;
   /** Node id the step acts on. */
   readonly node?: number;

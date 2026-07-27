@@ -1,103 +1,283 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { algorithmHref } from '@/catalog';
 import type { AlgorithmCategory } from '@/core/algorithms';
 import { useVisualizer } from '@/hooks/useVisualizer';
+import { useLesson } from '@/hooks/useLesson';
+import { LessonPanel } from '@/components/learn/LessonPanel';
+import { BottomSheet, type SheetSnap } from '@/components/ui/Sheet';
+import { Tabs, type TabItem } from '@/components/ui/Tabs';
+import { InsightsPanel } from '@/components/studio/InsightsPanel';
+import { PseudocodePane } from '@/components/studio/PseudocodePane';
+import { StageFrame } from '@/components/studio/StageFrame';
 import { AlgorithmSelector } from './AlgorithmSelector';
 import { ComplexityCard } from './ComplexityCard';
-import { ControlPanel } from './ControlPanel';
+import { ControlPanel, Scrubber, Transport } from './ControlPanel';
 import { Legend } from './Legend';
 import { VisualizerCanvas } from './VisualizerCanvas';
 
 interface Props {
   category: AlgorithmCategory;
-  /** Display title for the active family (e.g. "Sorting"). */
-  title: string;
-  /** One-line description of the family, shown under the title. */
-  blurb: string;
+  /** Route slug for the algorithm being shown. */
+  slug: string;
 }
 
 /**
- * The interactive studio for one algorithm family: orchestrates the visualizer
- * hook and lays out the canvas, algorithm selector, transport controls and
- * reference cards. Every part below is presentational and category-blind — this
- * component is mounted once per family (keyed by category) by the platform shell.
+ * The interactive studio.
+ *
+ * Layout by breakpoint:
+ * - **2xl** — three panes: pseudocode | stage | controls.
+ * - **xl**  — two panes; pseudocode folds into the tab strip under the stage.
+ * - **md/lg** — one column; stage on top, everything else in tabs.
+ * - **<md** — the stage sticks under the top bar, a compact transport strip
+ *   sits beneath it, and the full control panel lives in a draggable sheet.
+ *
+ * There is exactly one `ControlPanel` instance behind all of these: the layout
+ * changes, the controls don't.
  */
-export function VisualizerStudio({ category, title, blurb }: Props) {
+export function VisualizerStudio({ category, slug }: Props) {
+  const router = useRouter();
   const {
     containerRef,
     snapshot,
     algorithms,
     algorithmId,
     currentMeta,
+    pseudocode,
     params,
     controls,
     metricSpecs,
     legend,
+    series,
+    backendKind,
+    setInteractive,
     actions,
-  } = useVisualizer(category);
-  const accent = currentMeta?.accent ?? '#22d3ee';
+  } = useVisualizer(category, { initialAlgorithmId: slug });
 
-  // Keyboard transport: space toggles play, arrows single-step. Ignored while a
-  // form control (e.g. a slider) is focused so it never fights the inputs.
+  const accent = currentMeta?.accent ?? '#22d3ee';
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('peek');
+  const [tabId, setTabId] = useState('controls');
+
+  // Selecting a sibling is a navigation, not local state: the URL is the source
+  // of truth, and the hook picks the change up from the slug prop.
+  const selectAlgorithm = useCallback(
+    (id: string) => router.push(algorithmHref({ category, slug: id })),
+    [router, category],
+  );
+
+  useKeyboardTransport(actions);
+
+  // The lesson pauses playback when it reaches an unanswered checkpoint.
+  const lessonState = useLesson(algorithmId, snapshot, series, actions.pause);
+
+  const codePane = useMemo(
+    () =>
+      pseudocode ? (
+        <PseudocodePane
+          code={pseudocode}
+          activeLine={snapshot.line}
+          spotlight={lessonState.highlightLines}
+          playing={snapshot.status === 'playing'}
+          className="h-full"
+        />
+      ) : null,
+    [pseudocode, snapshot.line, snapshot.status, lessonState.highlightLines],
+  );
+
+  const controlPanel = useMemo(
+    () => (
+      <ControlPanel
+        snapshot={snapshot}
+        controls={controls}
+        params={params}
+        accent={accent}
+        actions={actions}
+      />
+    ),
+    [snapshot, controls, params, accent, actions],
+  );
+
+  const tabs = useMemo<TabItem[]>(() => {
+    const items: TabItem[] = [
+      { id: 'controls', label: 'Controls', content: <div className="pb-2">{controlPanel}</div> },
+    ];
+    if (codePane) {
+      items.push({ id: 'code', label: 'Pseudocode', content: <div className="h-72">{codePane}</div> });
+    }
+    if (lessonState.lesson || lessonState.loading) {
+      items.push({ id: 'lesson', label: 'Lesson', content: <LessonPanel state={lessonState} /> });
+    }
+    if (currentMeta) {
+      items.push({
+        id: 'insights',
+        label: 'Analysis',
+        content: (
+          <InsightsPanel
+            category={category}
+            meta={currentMeta}
+            snapshot={snapshot}
+            series={series}
+            metricSpecs={metricSpecs}
+            controls={controls}
+            accent={accent}
+          />
+        ),
+      });
+    }
+    items.push({ id: 'legend', label: 'Legend', content: <Legend items={legend} /> });
+    if (currentMeta) {
+      items.push({ id: 'about', label: 'About', content: <ComplexityCard meta={currentMeta} /> });
+    }
+    return items;
+  }, [
+    controlPanel,
+    codePane,
+    legend,
+    currentMeta,
+    category,
+    snapshot,
+    series,
+    metricSpecs,
+    controls,
+    accent,
+    lessonState,
+  ]);
+
+  return (
+    <div className="px-3 py-3 sm:px-6 sm:py-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[300px_minmax(0,1fr)_360px]">
+        {/* Pseudocode column — 2xl only; folded into the tabs below that. */}
+        <aside className="hidden 2xl:block">
+          <div className="sticky top-16 h-[min(70dvh,640px)]">{codePane ?? <NoPseudocode />}</div>
+        </aside>
+
+        <div className="flex min-w-0 flex-col gap-3">
+          <AlgorithmSelector
+            algorithms={algorithms}
+            activeId={algorithmId}
+            onSelect={selectAlgorithm}
+          />
+
+          {/* Sticking the stage below the top bar keeps the visualization on
+              screen while the sheet and tabs scroll underneath it. */}
+          <div className="sticky top-12 z-10 -mx-3 bg-surface-950 px-3 pb-2 pt-1 md:static md:mx-0 md:bg-transparent md:p-0">
+            <StageFrame
+              containerRef={containerRef}
+              onInteractiveChange={setInteractive}
+              needsWebGL={backendKind === 'webgl'}
+            >
+              <VisualizerCanvas snapshot={snapshot} metricSpecs={metricSpecs} accent={accent} />
+            </StageFrame>
+          </div>
+
+          {/* Compact transport for phones: the sheet may be collapsed, but
+              play/pause must always be one tap away. */}
+          <div className="flex items-center gap-3 md:hidden">
+            <Transport snapshot={snapshot} accent={accent} actions={actions} compact />
+            <Scrubber
+              snapshot={snapshot}
+              accent={accent}
+              onSeek={actions.seek}
+              className="min-w-0 flex-1"
+            />
+          </div>
+
+          <div className="hidden md:block 2xl:hidden">
+            <Tabs items={tabs} activeId={tabId} onChange={setTabId} />
+          </div>
+
+          <div className="hidden 2xl:block">
+            <Legend items={legend} />
+          </div>
+        </div>
+
+        {/* Controls column — xl and up. */}
+        <aside className="hidden flex-col gap-4 xl:flex">
+          <div className="panel p-4">{controlPanel}</div>
+          {currentMeta ? <ComplexityCard meta={currentMeta} /> : null}
+          {/* At 2xl the tab strip is gone (pseudocode has its own column), so
+              the analysis charts move into this rail instead. */}
+          {currentMeta ? (
+            <div className="panel hidden p-4 2xl:block">
+              <InsightsPanel
+                category={category}
+                meta={currentMeta}
+                snapshot={snapshot}
+                series={series}
+                metricSpecs={metricSpecs}
+                controls={controls}
+                accent={accent}
+              />
+            </div>
+          ) : null}
+        </aside>
+      </div>
+
+      {/* Mobile: the same control panel, in a draggable sheet. */}
+      <div className="md:hidden">
+        <BottomSheet snap={sheetSnap} onSnapChange={setSheetSnap} title="Controls & details">
+          <Tabs items={tabs} activeId={tabId} onChange={setTabId} />
+        </BottomSheet>
+        {/* Reserve room so the sheet's peek state never covers page content. */}
+        <div aria-hidden className="h-24" />
+      </div>
+    </div>
+  );
+}
+
+function NoPseudocode() {
+  return (
+    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-line px-6 text-center text-xs text-content-muted">
+      Pseudocode for this algorithm hasn’t been written yet.
+    </div>
+  );
+}
+
+/**
+ * Space toggles playback, arrows single-step, Home/End jump to the ends.
+ *
+ * Skipped while a form control has focus so it never fights the sliders, and
+ * skipped during IME composition so it never eats a keystroke mid-word.
+ */
+function useKeyboardTransport(actions: ReturnType<typeof useVisualizer>['actions']) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.code === 'Space') {
-        e.preventDefault();
-        actions.toggle();
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault();
-        actions.stepForward();
-      } else if (e.code === 'ArrowLeft') {
-        e.preventDefault();
-        actions.stepBackward();
+      // A dialog or sheet owns the keyboard while it's open.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          actions.toggle();
+          break;
+        case 'ArrowRight':
+        case '.':
+          e.preventDefault();
+          actions.stepForward();
+          break;
+        case 'ArrowLeft':
+        case ',':
+          e.preventDefault();
+          actions.stepBackward();
+          break;
+        case 'Home':
+          e.preventDefault();
+          actions.seek(-1);
+          break;
+        case 'End':
+          e.preventDefault();
+          actions.seek(Number.MAX_SAFE_INTEGER);
+          break;
+        default:
+          break;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [actions]);
-
-  return (
-    <section id="studio" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-16">
-      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">The Studio</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-100 md:text-4xl">{title}</h2>
-          <p className="mt-2 max-w-xl text-sm text-slate-400">{blurb}</p>
-        </div>
-        <AlgorithmSelector
-          algorithms={algorithms}
-          activeId={algorithmId}
-          onSelect={actions.selectAlgorithm}
-        />
-      </header>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="flex flex-col gap-4">
-          <div className="h-[420px] md:h-[560px]">
-            <VisualizerCanvas
-              containerRef={containerRef}
-              snapshot={snapshot}
-              metricSpecs={metricSpecs}
-              accent={accent}
-            />
-          </div>
-          <Legend items={legend} />
-        </div>
-
-        <aside className="flex flex-col gap-6">
-          <ControlPanel
-            snapshot={snapshot}
-            controls={controls}
-            params={params}
-            accent={accent}
-            actions={actions}
-          />
-          {currentMeta && <ComplexityCard meta={currentMeta} />}
-        </aside>
-      </div>
-    </section>
-  );
 }

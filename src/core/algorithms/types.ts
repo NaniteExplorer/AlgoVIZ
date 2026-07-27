@@ -14,6 +14,24 @@ export enum AlgorithmCategory {
   Graph = 'graph',
   Tree = 'tree',
   Searching = 'searching',
+  DynamicProgramming = 'dp',
+  Backtracking = 'backtracking',
+  Structures = 'structures',
+  MachineLearning = 'ml',
+}
+
+/**
+ * Mixed into every category's step type.
+ *
+ * The pseudocode pane highlights the line a step is executing. Rather than
+ * changing 28 algorithms at once, the field is optional and stamped by the
+ * tracer's line cursor: an algorithm that never calls `tracer.at()` emits
+ * `undefined` and the pane simply stays hidden for it. Adoption is therefore
+ * per-algorithm and never a breaking change.
+ */
+export interface TracedStep {
+  /** 0-indexed line in the algorithm's registered pseudocode. */
+  readonly line?: number;
 }
 
 /** Asymptotic profile, surfaced verbatim in the UI complexity card. */
@@ -43,6 +61,14 @@ export interface AlgorithmMeta {
   complexity: ComplexityProfile;
   /** Hex accent used to theme this algorithm in the UI + scene highlights. */
   accent: string;
+  /**
+   * Optional sub-grouping within a category ("MST", "String DP", "Hashing").
+   *
+   * Purely a display concern: a category with thirteen algorithms is unusable as
+   * a flat list of pills, but splitting the *taxonomy* would fragment the
+   * `CategoryModule` seam. Grouping solves the UI problem without touching it.
+   */
+  group?: string;
 }
 
 /**

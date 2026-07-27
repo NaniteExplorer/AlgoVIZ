@@ -3,7 +3,8 @@ import { describeSortStep } from '@/core/algorithms/sorting/describe';
 import type { SortStep } from '@/core/algorithms/sorting/SortStep';
 import { ArrayModel, CellRole } from '@/core/model/ArrayModel';
 import { ROLE_LABELS, ROLE_STYLES } from '@/theme';
-import { CategoryModule, type ControlSpec, type LegendItem, type MetricSpec } from '../CategoryModule';
+import type { ControlSpec, LegendItem, MetricSpec } from '../CategoryModule';
+import { WebGLCategoryModule } from '../WebGLCategoryModule';
 import type { EngineOptions } from '../engine/VisualizationEngine';
 import { SortingVisualizer } from './SortingVisualizer';
 
@@ -22,7 +23,7 @@ function randomArray(size: number): number[] {
  * universal {@link CategoryModule} contract so the generic hook/UI can host it
  * exactly like every other family.
  */
-export class SortingModule extends CategoryModule<SortStep> {
+export class SortingModule extends WebGLCategoryModule<SortStep, number[]> {
   readonly engineOptions: EngineOptions = {
     enableControls: true,
     autoRotate: false,
@@ -62,6 +63,15 @@ export class SortingModule extends CategoryModule<SortStep> {
 
   buildTimeline(algorithm: AnyAlgorithm): SortStep[] {
     return (algorithm as { run(input: number[]): SortStep[] }).run(this.input);
+  }
+
+  getInstance(): number[] {
+    return [...this.input];
+  }
+
+  setInstance(input: number[]): void {
+    this.input = [...input];
+    this.model.reset(this.input);
   }
 
   describe(step: SortStep): string {

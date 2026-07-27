@@ -1,3 +1,4 @@
+import { ignoreNever } from '@/core/util/assertNever';
 import { type TreeStep, TreeStepKind } from './TreeStep';
 
 /** Turn a tree step into a short narration line for the step inspector. */
@@ -19,6 +20,7 @@ export function describeTreeStep(step: TreeStep): string {
     case TreeStepKind.Done:
       return 'Traversal complete';
     default:
+      ignoreNever(step.kind);
       return '';
   }
 }

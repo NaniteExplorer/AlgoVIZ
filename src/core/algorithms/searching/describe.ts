@@ -1,3 +1,4 @@
+import { ignoreNever } from '@/core/util/assertNever';
 import { type SearchStep, SearchStepKind } from './SearchStep';
 
 /** Turn a search step into a short narration line for the step inspector. */
@@ -15,6 +16,7 @@ export function describeSearchStep(step: SearchStep): string {
     case SearchStepKind.Exhausted:
       return 'Target is not present';
     default:
+      ignoreNever(step.kind);
       return '';
   }
 }

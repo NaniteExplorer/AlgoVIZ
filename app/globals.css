@@ -2,9 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * ── Design tokens ───────────────────────────────────────────────────────────
+ *
+ * Every colour is a CSS variable in space-separated channel form so Tailwind's
+ * `/opacity` modifiers keep working (`bg-surface-800/60`). Tailwind maps each
+ * token name to `rgb(var(--token) / <alpha-value>)`.
+ *
+ * IMPORTANT — read the `surface` scale as *distance from the page background*,
+ * not as darkness. `surface-950` is always the page backdrop and `surface-600`
+ * always the most raised chrome; in dark mode that runs black → grey, in light
+ * mode white → grey. Keeping the names stable is what lets ~200 existing
+ * utility classes flip themes without being rewritten.
+ */
 @layer base {
   :root {
+    /* Light theme (default; the pre-paint script adds `.dark` when needed). */
+    --c-surface-950: 250 250 252;
+    --c-surface-900: 255 255 255;
+    --c-surface-800: 244 245 250;
+    --c-surface-700: 226 229 238;
+    --c-surface-600: 203 208 222;
+
+    --c-content-primary: 15 18 28;
+    --c-content-secondary: 71 80 100;
+    --c-content-muted: 120 130 150;
+    --c-content-inverse: 255 255 255;
+
+    --c-line: 226 229 238;
+    --c-line-strong: 203 208 222;
+
+    --c-accent: 8 145 178;
+    --c-accent-glow: 14 165 190;
+    --c-accent-violet: 124 58 237;
+    --c-accent-rose: 225 29 72;
+    --c-accent-amber: 180 83 9;
+    --c-accent-emerald: 5 150 105;
+    --c-accent-contrast: 255 255 255;
+
+    --c-focus: 8 145 178;
+
+    /*
+     * Neon multiplier. Glows are the dark theme's signature and a liability on
+     * white, so every glow effect is gated on this rather than being duplicated
+     * per theme.
+     */
+    --glow: 0;
+    --shadow-panel: 0 1px 2px rgb(15 18 28 / 0.06), 0 8px 24px -12px rgb(15 18 28 / 0.14);
+
+    --sidebar-w: 264px;
+    --topbar-h: 3rem;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --c-surface-950: 5 6 10;
+    --c-surface-900: 10 12 20;
+    --c-surface-800: 17 20 31;
+    --c-surface-700: 26 30 46;
+    --c-surface-600: 37 43 64;
+
+    --c-content-primary: 241 245 249;
+    --c-content-secondary: 148 163 184;
+    --c-content-muted: 100 116 139;
+    --c-content-inverse: 5 6 10;
+
+    --c-line: 26 30 46;
+    --c-line-strong: 37 43 64;
+
+    --c-accent: 34 211 238;
+    --c-accent-glow: 103 232 249;
+    --c-accent-violet: 167 139 250;
+    --c-accent-rose: 251 113 133;
+    --c-accent-amber: 251 191 36;
+    --c-accent-emerald: 52 211 153;
+    --c-accent-contrast: 5 6 10;
+
+    --c-focus: 103 232 249;
+
+    --glow: 1;
+    --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -16px rgb(0 0 0 / 0.7);
+
     color-scheme: dark;
+  }
+
+  [data-sidebar='collapsed'] {
+    --sidebar-w: 56px;
   }
 
   html {
@@ -12,10 +96,43 @@
   }
 
   body {
-    @apply bg-surface-950 text-slate-200 antialiased;
+    @apply bg-surface-950 text-content-secondary antialiased;
+  }
+
+  /*
+   * Ambient glow behind the page. Fades to nothing in light mode via --glow
+   * instead of being conditionally applied, so there is one rule to maintain.
+   */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: var(--glow);
     background-image:
       radial-gradient(60rem 60rem at 50% -20%, rgba(34, 211, 238, 0.08), transparent),
       radial-gradient(50rem 50rem at 90% 10%, rgba(167, 139, 250, 0.06), transparent);
+  }
+
+  /* One focus ring for the whole app, so no component can forget it. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--c-focus));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
@@ -25,10 +142,66 @@
     @apply h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-700;
   }
   .algoviz-range::-webkit-slider-thumb {
-    @apply h-4 w-4 appearance-none rounded-full border-2 border-surface-950 bg-white;
-    box-shadow: 0 0 10px currentColor;
+    @apply h-4 w-4 appearance-none rounded-full border-2 border-surface-950 bg-accent;
   }
   .algoviz-range::-moz-range-thumb {
-    @apply h-4 w-4 rounded-full border-2 border-surface-950 bg-white;
+    @apply h-4 w-4 rounded-full border-2 border-surface-950 bg-accent;
+  }
+  /*
+   * Coarse pointers need a bigger grab target than 16px. The track stays slim;
+   * only the thumb grows, so the control doesn't look chunky on desktop.
+   */
+  @media (pointer: coarse) {
+    .algoviz-range::-webkit-slider-thumb {
+      @apply h-6 w-6;
+    }
+    .algoviz-range::-moz-range-thumb {
+      @apply h-6 w-6;
+    }
+  }
+
+  /*
+   * Expands a small control's hit area on touch devices without changing how
+   * big it looks. Lets the desktop transport stay compact while still clearing
+   * the 44px touch-target guideline on a phone.
+   */
+  .tap-target::before {
+    content: '';
+    position: absolute;
+    inset: -0.375rem;
+  }
+  @media (pointer: coarse) {
+    .tap-target::before {
+      inset: -0.625rem;
+    }
+  }
+
+  /* Accent-coloured bloom, automatically neutralised in light mode. */
+  .glow-accent {
+    box-shadow: 0 0 calc(24px * var(--glow)) calc(-4px * var(--glow)) currentColor;
+  }
+
+  .panel {
+    @apply rounded-2xl border border-line bg-surface-900/70 backdrop-blur;
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* Horizontal scroll containers must never make the page scroll sideways. */
+  .scroll-x {
+    @apply overflow-x-auto overscroll-x-contain;
+    scrollbar-width: thin;
+  }
+}
+
+@layer utilities {
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* Hide a scrollbar without disabling scrolling (mobile tab rails). */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

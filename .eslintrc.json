@@ -1,3 +1,33 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": ["next/core-web-vitals", "plugin:jsx-a11y/recommended"],
+  "rules": {
+    "jsx-a11y/no-noninteractive-element-interactions": "off",
+    "jsx-a11y/click-events-have-key-events": "off",
+    "jsx-a11y/no-static-element-interactions": "off",
+    "jsx-a11y/no-redundant-roles": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/core/algorithms/**/*.ts", "src/catalog/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "three",
+                "message": "The algorithm and catalog layers must stay renderer-free: they are imported by Server Components for generateStaticParams/metadata, and pulling in Three.js there breaks the static build. Put rendering code in src/core/visualization/**."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["three/*", "@/core/visualization", "@/core/visualization/*"],
+                "message": "The algorithm and catalog layers must not depend on the visualization layer — the dependency runs the other way."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

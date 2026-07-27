@@ -1,3 +1,4 @@
+import { StepTracer } from '../StepTracer';
 import { type SearchStep, SearchStepKind } from './SearchStep';
 
 /**
@@ -5,16 +6,12 @@ import { type SearchStep, SearchStepKind } from './SearchStep';
  * the algorithm reads values and the target through the tracer and emits steps
  * via intention-revealing methods, so index bookkeeping stays in one place.
  */
-export class SearchTracer {
-  private readonly _steps: SearchStep[] = [];
-
+export class SearchTracer extends StepTracer<SearchStep> {
   constructor(
     private readonly values: number[],
     readonly target: number,
-  ) {}
-
-  get steps(): readonly SearchStep[] {
-    return this._steps;
+  ) {
+    super();
   }
 
   value(i: number): number {
@@ -26,23 +23,23 @@ export class SearchTracer {
   }
 
   bounds(lo: number, hi: number, note?: string): void {
-    this._steps.push({ kind: SearchStepKind.Bounds, lo, hi, note });
+    this.record({ kind: SearchStepKind.Bounds, lo, hi, note });
   }
 
   probe(index: number, note?: string): void {
-    this._steps.push({ kind: SearchStepKind.Probe, index, note });
+    this.record({ kind: SearchStepKind.Probe, index, note });
   }
 
   eliminate(from: number, to: number, note?: string): void {
     if (from > to) return;
-    this._steps.push({ kind: SearchStepKind.Eliminate, from, to, note });
+    this.record({ kind: SearchStepKind.Eliminate, from, to, note });
   }
 
   found(index: number, note?: string): void {
-    this._steps.push({ kind: SearchStepKind.Found, index, note });
+    this.record({ kind: SearchStepKind.Found, index, note });
   }
 
   exhausted(note?: string): void {
-    this._steps.push({ kind: SearchStepKind.Exhausted, note });
+    this.record({ kind: SearchStepKind.Exhausted, note });
   }
 }

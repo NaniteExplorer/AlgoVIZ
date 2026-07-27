@@ -1,0 +1,25 @@
+{
+  "//": "Compiles the pure (renderer-free) layer to CommonJS so the verification suite can require it under plain Node. Kept separate from the app tsconfig, which targets the bundler.",
+  "compilerOptions": {
+    "outDir": "../.verify-build",
+    "rootDir": "../src",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2022",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "baseUrl": "..",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": [
+    "../src/core/algorithms/**/*.ts",
+    "../src/core/model/**/*.ts",
+    "../src/core/playback/**/*.ts",
+    "../src/core/util/**/*.ts",
+    "../src/core/pseudocode/**/*.ts",
+    "../src/core/analysis/MetricSeries.ts",
+    "../src/core/analysis/ComplexityModel.ts"
+  ]
+}

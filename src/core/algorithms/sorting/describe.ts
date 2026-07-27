@@ -1,3 +1,4 @@
+import { ignoreNever } from '@/core/util/assertNever';
 import { type SortStep, SortStepKind } from './SortStep';
 
 /** Turn a step into a short narration line for the step inspector. */
@@ -17,6 +18,9 @@ export function describeSortStep(step: SortStep): string {
     case SortStepKind.MarkSorted:
       return `Position ${step.a} is now sorted`;
     default:
+      // Compile-time exhaustiveness: adding a SortStepKind without a case here
+      // is a type error, not a silently blank narration line.
+      ignoreNever(step.kind);
       return '';
   }
 }

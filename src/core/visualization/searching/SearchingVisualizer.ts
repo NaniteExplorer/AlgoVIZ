@@ -127,10 +127,12 @@ export class SearchingVisualizer extends Visualizer {
   }
 
   private buildEnvironment(): void {
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(260, 260),
-      new THREE.MeshStandardMaterial({ color: SCENE.floor, roughness: 0.6, metalness: 0.4 }),
-    );
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: SCENE.floor,
+      roughness: 0.6,
+      metalness: 0.4,
+    });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.02;
 
@@ -138,6 +140,7 @@ export class SearchingVisualizer extends Visualizer {
     (grid.material as THREE.Material).opacity = 0.25;
     (grid.material as THREE.Material).transparent = true;
 
+    this.registerEnvironment(floorMaterial, grid);
     this.group.add(floor, grid);
   }
 }

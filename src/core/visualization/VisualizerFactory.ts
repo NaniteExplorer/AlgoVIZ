@@ -4,6 +4,7 @@ import { SortingModule } from './sorting/SortingModule';
 import { SearchingModule } from './searching/SearchingModule';
 import { GraphModule } from './graph/GraphModule';
 import { TreeModule } from './tree/TreeModule';
+import { StructureModule } from './structures/StructureModule';
 
 /**
  * Maps an algorithm category to the {@link CategoryModule} that drives it.
@@ -25,6 +26,8 @@ export class VisualizerFactory {
         return new GraphModule();
       case AlgorithmCategory.Tree:
         return new TreeModule();
+      case AlgorithmCategory.Structures:
+        return new StructureModule();
       default:
         throw new Error(
           `VisualizerFactory: no visualizer registered for category "${category}".`,

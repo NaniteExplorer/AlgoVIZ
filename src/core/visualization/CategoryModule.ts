@@ -1,7 +1,8 @@
 import type { AnyAlgorithm } from '@/core/algorithms';
+import type { SceneTheme } from '@/theme';
 import type { StepConsumer } from '@/core/playback/PlaybackController';
-import type { EngineOptions } from './engine/VisualizationEngine';
-import type { Visualizer } from './Visualizer';
+import type { BackendSpec } from './backend/BackendSpec';
+import type { RenderBackend } from './backend/RenderBackend';
 
 /**
  * Declarative description of one interactive parameter (rendered as a slider in
@@ -31,46 +32,106 @@ export interface MetricSpec {
   label: string;
 }
 
+/** A reproducible starting point — used by lessons and by the race view. */
+export interface Preset {
+  params: Record<string, number>;
+  /** Seed for the family's generator; identical seeds must yield identical inputs. */
+  seed?: number;
+}
+
 /**
  * A self-contained rendering + input driver for a single algorithm family.
  *
  * This is the platform's universal extension seam. It bundles everything that
- * is *category-specific* — the model (a {@link StepConsumer}), the Three.js
- * visualizer, random input generation, per-step narration, and the UI metadata
- * (controls, legend, metrics) — behind one interface. The React hook
- * (`useVisualizer`), the playback controller and every chrome component are
- * built purely against this contract, so adding Searching/Graph/Tree families
- * never touches a line of generic code: implement a `CategoryModule`, then add
- * one `case` to {@link VisualizerFactory}.
+ * is *category-specific* — the model (a {@link StepConsumer}), the renderer,
+ * random input generation, per-step narration, and the UI metadata (controls,
+ * legend, metrics) — behind one interface. The React hook (`useVisualizer`), the
+ * playback controller and every chrome component are built purely against this
+ * contract, so adding a family never touches a line of generic code: implement a
+ * `CategoryModule`, then add one `case` to {@link VisualizerFactory}.
+ *
+ * The module also *owns its backend*. That keeps backend-specific types from
+ * leaking upward — the hook only ever holds a {@link RenderBackend} — and is
+ * what lets 2D families (DP tables, recursion trees, data structures) coexist
+ * with the WebGL ones without any conditional logic in the chrome.
  *
  * Lifecycle the hook drives per dataset:
  *   `regenerate(params)` → `rebuild()` → `buildTimeline(algorithm)` → load.
+ *
+ * Most families should extend {@link WebGLCategoryModule} or
+ * {@link Canvas2DCategoryModule} rather than this class directly.
  */
-export abstract class CategoryModule<TStep = unknown> {
-  /** Engine configuration (camera, bloom, controls) tuned for this family. */
-  abstract readonly engineOptions: EngineOptions;
+export abstract class CategoryModule<TStep = unknown, TInput = unknown> {
+  /** Which renderer this family needs, and how to configure it. */
+  abstract readonly backend: BackendSpec;
   /** Interactive sliders this family exposes beyond the universal speed slider. */
   abstract readonly controls: ControlSpec[];
   /** Counters shown in the HUD, in display order. */
   abstract readonly metricSpecs: MetricSpec[];
   /** The pure state machine the playback controller drives. */
   abstract readonly model: StepConsumer<TStep>;
-  /** The scene renderer that pulls from {@link model} every frame. */
-  abstract readonly visualizer: Visualizer;
+
+  // ── Rendering ───────────────────────────────────────────────────────
+
+  /** Instantiate the backend this family renders into. */
+  abstract createBackend(): RenderBackend;
+  /** Bind this family's visualizer to a backend returned by `createBackend`. */
+  abstract attachTo(backend: RenderBackend): void;
+  /** Unbind the visualizer. The caller disposes the backend separately. */
+  abstract detach(): void;
+  /** Re-layout the scene to match the current instance (after `regenerate`). */
+  abstract rebuild(): void;
+
+  // ── Data ────────────────────────────────────────────────────────────
 
   /** Live metric values for the current model state. */
   abstract metrics(): Record<string, number>;
   /** Colour key explaining the scene's highlight palette. */
   abstract legend(): LegendItem[];
   /**
-   * Generate a fresh random problem instance from `params` and load it into the
-   * model. Must leave the model at its initial (pre-run) state.
+   * Generate a fresh problem instance from `params` and load it into the model.
+   * Must leave the model at its initial (pre-run) state.
    */
   abstract regenerate(params: Record<string, number>): void;
   /** Run `algorithm` against the *current* instance and return its timeline. */
   abstract buildTimeline(algorithm: AnyAlgorithm): TStep[];
   /** One-line narration for the step inspector. */
   abstract describe(step: TStep): string;
-  /** Re-layout the scene to match the current instance (after `regenerate`). */
-  abstract rebuild(): void;
+
+  /**
+   * The current problem instance.
+   *
+   * Must return plain, structured-cloneable data: the race view clones one
+   * lane's instance into the others so every algorithm is judged on identical
+   * input, and lessons persist instances to reproduce a scenario exactly.
+   */
+  abstract getInstance(): TInput;
+  /** Install an externally supplied instance in place of a generated one. */
+  abstract setInstance(input: TInput): void;
+
+  // ── Optional hooks ──────────────────────────────────────────────────
+
+  /**
+   * Restore a reproducible starting point. Default regenerates from `params`;
+   * families with a seedable generator should override to honour `seed`.
+   */
+  applyPreset(preset: Preset): void {
+    this.regenerate(preset.params);
+  }
+
+  /**
+   * Pseudocode line this step maps to, if the algorithm opted in.
+   *
+   * The default reads a structural `line` field, so no family needs to override
+   * it — which is what makes pseudocode an additive, per-algorithm migration
+   * rather than a breaking change across all of them.
+   */
+  lineOf(step: TStep): number | undefined {
+    return (step as { line?: number } | null)?.line;
+  }
+
+  /** Follow an app theme change. Default is a no-op. */
+  setTheme(_theme: SceneTheme): void {
+    /* families opt in by overriding */
+  }
 }
